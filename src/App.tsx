@@ -578,7 +578,7 @@ function Done({ name, email, count }: { name: string; email: string; count: numb
         </div>
         <h1 className="text-[24px] font-bold mb-3">Thank you{name ? `, ${name.split(" ")[0]}` : ""}</h1>
         <p className="text-[14.5px] text-ink-soft leading-relaxed mb-4">
-          We have your {count} {count === 1 ? "row" : "rows"}, and they are safely with us.
+          We have your {count} {count === 1 ? "row" : "rows"}, safely received.
         </p>
         <p className="text-[14.5px] text-ink-soft leading-relaxed mb-8">
           One of our consultants will be in touch at{" "}
