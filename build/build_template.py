@@ -4,6 +4,10 @@
 Descended from the template TwentySix had already iterated on (sheet protection,
 highlighted input cells, 500 rows). Changed since:
 
+  0. No sheet protection. It guarded the headers, but it is the client who has to
+     fill this in, and a locked sheet blocks pasting a block, inserting a row and
+     sorting. The parser tolerates a mangled sheet, so the trade was the wrong way
+     round.
   1. No dropdowns. Job level is free text, because a client's own level names
      rarely match ours and forcing a choice made them guess. Mapping their
      wording onto our four levels is our job, not theirs, so the sheet carries a
@@ -22,7 +26,7 @@ Run: python3 build/build_template.py   (or npm run template)
 from pathlib import Path
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 OUT = Path(__file__).resolve().parent.parent / "public" / "Zigbert-Benchmarking-Template.xlsx"
@@ -51,7 +55,7 @@ LEVEL_GUIDE = [
      "Sets direction, or is the recognised authority in their field. Decisions carry organisation-wide."),
 ]
 
-EMPLOYEE_BANDS = ["0-49", "50-99", "100-249", "250-499", "500-999", "1,000+"]
+EMPLOYEE_BANDS = ["0-49", "50-99", "100-249", "250-499", "500+"]
 
 thin = Side(style="thin", color=LINE)
 BOX = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -138,15 +142,6 @@ def role_sheet(wb, name: str, title: str, sub: str, cols: list[tuple[str, int]])
         ws.cell(row=r, column=salary_col).number_format = "#,##0"
     ws.freeze_panes = "A6"
 
-    # Protect the structure, not the inputs: stops a stray paste destroying the
-    # headers while leaving every input cell editable.
-    for r in range(6, 6 + ROWS):
-        for i in range(1, len(cols) + 1):
-            ws.cell(row=r, column=i).protection = Protection(locked=False)
-    ws.protection.sheet = True
-    ws.protection.password = "zigbert"
-    ws.protection.selectLockedCells = True
-    ws.protection.selectUnlockedCells = True
     return ws
 
 
@@ -183,7 +178,6 @@ def build() -> None:
         v.border = BOX
         v.fill = PatternFill("solid", fgColor=INPUT_FILL)
         v.font = Font(name="Inter", size=10)
-        v.protection = Protection(locked=False)
         if hint:
             org.cell(row=r, column=3, value=hint).font = Font(
                 name="Inter", size=8.5, italic=True, color=MUTED)
@@ -209,10 +203,6 @@ def build() -> None:
     org.row_dimensions[16].height = 32
 
     level_guide(org, 18, 1, 2)
-    org.protection.sheet = True
-    org.protection.password = "zigbert"
-    org.protection.selectLockedCells = True
-    org.protection.selectUnlockedCells = True
 
     # ── By role ─────────────────────────────────────────────────────────
     role_sheet(

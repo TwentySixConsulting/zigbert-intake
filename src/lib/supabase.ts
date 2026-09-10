@@ -79,7 +79,7 @@ export const LEVEL_GUIDE: { name: string; meaning: string }[] = [
     meaning: "Sets direction, or is the recognised authority in their field. Decisions carry organisation-wide." },
 ];
 
-export const EMPLOYEE_BANDS = ["0-49", "50-99", "100-249", "250-499", "500-999", "1,000+"] as const;
+export const EMPLOYEE_BANDS = ["0-49", "50-99", "100-249", "250-499", "500+"] as const;
 
 export const LOCATIONS = [
   "London",
