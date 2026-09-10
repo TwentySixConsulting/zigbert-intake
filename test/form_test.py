@@ -78,6 +78,8 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1200)
     body = captured.get("body") or {}
     check(pg.locator("h1:has-text('Thank you')").count() == 1, "reaches the thank-you page")
+    check(pg.locator("text=confirmation is on its way").count() == 0,
+          "does not promise a confirmation email we do not send")
     check(len(body.get("roles", [])) == 2, f"sends both roles ({len(body.get('roles', []))})")
     check(body.get("entry_mode") == "online", "records entry_mode = online")
     check(body.get("contact_email") == "dana@hollowoak.example", "sends the contact email")

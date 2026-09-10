@@ -578,12 +578,12 @@ function Done({ name, email, count }: { name: string; email: string; count: numb
         </div>
         <h1 className="text-[24px] font-bold mb-3">Thank you{name ? `, ${name.split(" ")[0]}` : ""}</h1>
         <p className="text-[14.5px] text-ink-soft leading-relaxed mb-4">
-          We have your {count} role{count === 1 ? "" : "s"}. A confirmation is on its way to{" "}
-          <strong className="text-ink">{email}</strong>.
+          We have your {count} {count === 1 ? "row" : "rows"}, and they are safely with us.
         </p>
         <p className="text-[14.5px] text-ink-soft leading-relaxed mb-8">
-          One of our consultants will be in touch to confirm the comparator group before we
-          start. You will get your dashboard back by email once it is built.
+          One of our consultants will be in touch at{" "}
+          <strong className="text-ink">{email}</strong> to confirm the comparator group before
+          we start. You will get your dashboard back by email once it is built.
         </p>
         <div className="border border-line rounded-xl bg-white p-5 text-left">
           <p className="flex items-center gap-2 font-semibold text-[13.5px] mb-2">
@@ -596,7 +596,7 @@ function Done({ name, email, count }: { name: string; email: string; count: numb
           </ol>
         </div>
         <p className="text-[12.5px] text-ink-soft mt-6">
-          Need to change something? Reply to the confirmation email or write to{" "}
+          Need to change something, or send more? Write to{" "}
           <a className="text-clay-deep underline" href={`mailto:${CONTACT}`}>{CONTACT}</a>.
         </p>
       </main>

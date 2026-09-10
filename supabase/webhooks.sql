@@ -27,11 +27,13 @@ declare
                      'Content-Type', 'application/json',
                      'Authorization', 'Bearer <ANON_KEY>');
 begin
-  -- pg_net queues these and a background worker sends them, so a slow or failing
-  -- mail provider cannot block the client's submission or roll it back.
-  perform net.http_post(
-    url := 'https://taveeeeesxlgunibcoov.supabase.co/functions/v1/intake-confirmation',
-    body := payload, headers := auth, timeout_milliseconds := 10000);
+  -- pg_net queues this and a background worker sends it, so a slow or failing mail
+  -- provider cannot block the client's submission or roll it back.
+  --
+  -- Only the consultant is emailed. Client confirmations are sent by hand at our end,
+  -- so intake-confirmation is deliberately NOT called: it would 403 on every
+  -- submission (unverified sending domain) and fire a failure alert each time. The
+  -- function stays deployed, ready to be wired back in if that changes.
   perform net.http_post(
     url := 'https://taveeeeesxlgunibcoov.supabase.co/functions/v1/intake-notify',
     body := payload, headers := auth, timeout_milliseconds := 10000);
