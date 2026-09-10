@@ -1,0 +1,69 @@
+-- Run this in the Supabase SQL editor to create the benchmarking intake table.
+--
+-- The public form uses the anon key and may INSERT only. It cannot read any
+-- submission back, which matters more here than it does for the waitlist:
+-- these rows carry salaries.
+
+create table if not exists public.intake_submissions (
+  id                 uuid primary key default gen_random_uuid(),
+
+  -- who is asking
+  contact_name       text        not null,
+  contact_email      text        not null,
+  contact_job_title  text,
+  contact_phone      text,
+
+  -- their organisation
+  organisation       text        not null,
+  industry           text,
+  employee_count     text,
+  main_location      text,
+
+  -- what they sent. Roles are held as JSONB rather than a child table so the
+  -- whole submission lands in ONE insert: the confirmation and notification
+  -- emails fire from an INSERT webhook, and a two-table write would either
+  -- email before the roles arrived or need a transaction the anon role cannot run.
+  roles              jsonb       not null default '[]'::jsonb,
+  role_count         integer     generated always as (jsonb_array_length(roles)) stored,
+  entry_mode         text        check (entry_mode in ('online', 'upload')),
+  uploaded_filename  text,
+  notes              text,
+
+  created_at         timestamptz not null default now()
+);
+
+comment on column public.intake_submissions.roles is
+  'Array of {title, salary, level, family, location, headcount}. Salary is a number or null.';
+
+-- A client may legitimately submit twice (a correction, or a second batch), so
+-- there is deliberately NO unique index on email. Duplicates are a support
+-- question, not a data error.
+create index if not exists intake_submissions_created_idx
+  on public.intake_submissions (created_at desc);
+create index if not exists intake_submissions_email_idx
+  on public.intake_submissions (lower(contact_email));
+
+alter table public.intake_submissions enable row level security;
+
+-- Anonymous inserts only. No select/update/delete policy means no public reads:
+-- with RLS on and no SELECT policy, a read returns an empty array, not an error.
+drop policy if exists "anon can submit intake" on public.intake_submissions;
+create policy "anon can submit intake"
+  on public.intake_submissions
+  for insert
+  to anon
+  with check (true);
+
+-- Guard rails. The form validates too, but the form is the thing an attacker
+-- skips, and these are the constraints that keep junk out of the consultant's inbox.
+alter table public.intake_submissions
+  drop constraint if exists intake_email_shape;
+alter table public.intake_submissions
+  add constraint intake_email_shape
+  check (contact_email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+alter table public.intake_submissions
+  drop constraint if exists intake_roles_is_array;
+alter table public.intake_submissions
+  add constraint intake_roles_is_array
+  check (jsonb_typeof(roles) = 'array' and jsonb_array_length(roles) <= 500);
