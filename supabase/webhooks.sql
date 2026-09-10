@@ -3,9 +3,9 @@
 -- Supabase's Database Webhooks UI writes triggers exactly like these. Doing it in
 -- SQL means the whole setup is one paste instead of six form fields typed twice.
 --
--- Replace <ANON_KEY> below with the project's anon key before running. It is the
--- same key the public site already ships, so this is not a secret being created;
--- the edge function gateway simply requires a bearer token.
+--@PLACEHOLDER-NOTE Replace <ANON_KEY> below with the project's anon key before running.
+--@PLACEHOLDER-NOTE It is the same key the public site already ships, so this is not a
+--@PLACEHOLDER-NOTE secret being created; the gateway simply requires a bearer token.
 
 -- supabase_functions only exists once Database Webhooks have been switched on for
 -- the project. Fail with a sentence that says what to do, rather than "schema does
