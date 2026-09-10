@@ -61,6 +61,45 @@ function html(firstName: string, org: string, count: number) {
 </body></html>`;
 }
 
+/**
+ * Sent to us, not the client, when their confirmation could not go out. Uses
+ * Resend's own sender rather than ours, because the most likely reason the first
+ * attempt failed is that our domain is not verified.
+ */
+async function alertConsultant(clientEmail: string, detail: string) {
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "Zigbert <onboarding@resend.dev>",
+        to: ["millieharrison@twentysixconsulting.co.uk"],
+        subject: "Intake confirmation email FAILED to send",
+        html: `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#121c2b">
+          <h2 style="font-size:17px;margin:0 0 10px;">A client did not get their confirmation</h2>
+          <p style="font-size:14px;line-height:1.6;color:#4b5563;margin:0 0 12px;">
+            Their submission <strong>was saved</strong>, and the notification with their roles
+            has been sent to you separately. Only the confirmation to
+            <strong>${esc(clientEmail)}</strong> failed, so they are waiting without knowing
+            we have it. Worth a quick reply by hand.
+          </p>
+          <pre style="font-size:12px;background:#f6f7f9;padding:10px;border-radius:6px;
+            white-space:pre-wrap;color:#4b5563;">${esc(detail)}</pre>
+          <p style="font-size:13px;color:#4b5563;">
+            If this says the domain is not verified, add twentysixconsulting.co.uk at
+            resend.com/domains and this stops happening.
+          </p>
+        </div>`,
+      }),
+    });
+  } catch (_) {
+    // Nothing further to try. The 502 below still records it in the function logs.
+  }
+}
+
 serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
   if (!RESEND_API_KEY) return new Response("RESEND_API_KEY not set", { status: 500 });
@@ -88,7 +127,15 @@ serve(async (req) => {
         html: html(first, r.organisation ?? "your organisation", count),
       }),
     });
-    if (!res.ok) return new Response(`Resend error: ${await res.text()}`, { status: 502 });
+    if (!res.ok) {
+      const detail = await res.text();
+      // A client who submits and hears nothing back assumes it did not work, and
+      // we would never know. The trigger deliberately swallows errors so a mail
+      // problem cannot lose a submission, which means this is the only place the
+      // failure can be surfaced. Tell the consultant instead of failing quietly.
+      await alertConsultant(to, detail);
+      return new Response(`Resend error: ${detail}`, { status: 502 });
+    }
     return new Response(JSON.stringify({ ok: true }), {
       headers: { "Content-Type": "application/json" },
     });
