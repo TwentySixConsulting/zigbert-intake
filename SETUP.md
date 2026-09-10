@@ -46,7 +46,26 @@ you want them sent from a verified domain rather than Resend's test sender:
 supabase secrets set FROM_EMAIL="Zigbert <hello@twentysixconsulting.co.uk>"
 ```
 
-## 3. Prove it works
+## 3. Verify the sending domain in Resend
+
+**The one thing still outstanding.** Client confirmations do not send until this is
+done. Resend returns:
+
+> The twentysixconsulting.co.uk domain is not verified
+
+Add **twentysixconsulting.co.uk** at [resend.com/domains](https://resend.com/domains)
+and put the DNS records it gives you on the domain. No code change is needed after
+that; the function already sends from `hello@twentysixconsulting.co.uk`.
+
+Resend's fallback sender (`onboarding@resend.dev`) is **not** a workaround: it only
+delivers to the Resend account owner, so a real client would still get nothing.
+
+Until it is verified, a failed confirmation emails **you** instead, saying whose it
+was and that their submission was still saved, so nobody is left waiting silently.
+
+The consultant notification is unaffected and already works.
+
+## 4. Prove it works
 
 ```bash
 python3 test/live_check.py --write
