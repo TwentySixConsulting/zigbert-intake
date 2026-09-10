@@ -17,6 +17,9 @@ if p.exists():
         if m: env[m.group(1)] = m.group(2).strip().strip('"')
 URL = env.get("VITE_SUPABASE_URL", "").rstrip("/")
 KEY = env.get("VITE_SUPABASE_ANON_KEY", "")
+# Service-role, local only. Lets the check read a test row back and delete it,
+# which the public key deliberately cannot do.
+SECRET = env.get("SUPABASE_SECRET_KEY", "")
 TABLE = "intake_submissions"
 ok = bad = 0
 
@@ -25,12 +28,13 @@ def check(good, msg, detail=""):
     if good: ok += 1; print("  ok  ", msg)
     else:    bad += 1; print("  FAIL", msg, ("\n         " + detail) if detail else "")
 
-def call(method, path, body=None):
+def call(method, path, body=None, admin=False, prefer="return=minimal"):
+    k = SECRET if (admin and SECRET) else KEY
     req = urllib.request.Request(
         f"{URL}/rest/v1/{path}", method=method,
         data=json.dumps(body).encode() if body is not None else None,
-        headers={"apikey": KEY, "Authorization": f"Bearer {KEY}",
-                 "Content-Type": "application/json", "Prefer": "return=minimal"})
+        headers={"apikey": k, "Authorization": f"Bearer {k}",
+                 "Content-Type": "application/json", "Prefer": prefer})
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
             return r.status, r.read().decode()
@@ -83,11 +87,29 @@ if exists:
         }
         s, b = call("POST", TABLE, row)
         check(s in (200, 201, 204), f"a real submission inserts (HTTP {s})", b[:200])
+        if s in (200, 201, 204) and SECRET:
+            # Read it back with the service key to prove what actually landed, not
+            # just that the POST was accepted.
+            s2, b2 = call("GET", f"{TABLE}?select=*&organisation=eq.Zigbert%20internal%20test"
+                                 "&order=created_at.desc&limit=1", admin=True)
+            try:
+                got = json.loads(b2)[0]
+            except Exception:
+                got = {}
+            check(got.get("role_count") == 2, f"the row stored 2 roles (role_count={got.get('role_count')})")
+            check(got.get("basis") == "role", "the row stored the basis")
+            check((got.get("roles") or [{}])[1].get("comment") == "Covers two funds since March.",
+                  "the row stored the per-role comment")
+            check(got.get("employee_count") == "0-49", "the row stored the employee band")
         if s in (200, 201, 204):
             print("       Check both inboxes now:")
             print(f"         client confirmation -> {row['contact_email']}")
             print( "         consultant notice   -> millieharrison@twentysixconsulting.co.uk")
-            print( "       Delete the row afterwards: it is labelled 'Zigbert internal test'.")
+            if SECRET and "--keep" not in sys.argv:
+                d, _ = call("DELETE", f"{TABLE}?organisation=eq.Zigbert%20internal%20test", admin=True)
+                check(d in (200, 204), f"the test row was cleaned up afterwards (HTTP {d})")
+            else:
+                print("       Row left in place; it is labelled 'Zigbert internal test'.")
     else:
         print("\n(Run with --write to insert a real row and test both emails.)")
 
