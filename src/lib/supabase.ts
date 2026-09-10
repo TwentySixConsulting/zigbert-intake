@@ -10,6 +10,8 @@ export const supabase: SupabaseClient | null =
 
 export const supabaseConfigured = Boolean(url && anonKey);
 
+export const SUPPORT_EMAIL = "consultants@twentysixconsulting.co.uk";
+
 export type Role = {
   title: string;
   salary: number | null;
@@ -38,12 +40,28 @@ export async function submitIntake(s: Submission): Promise<void> {
   if (!supabase) {
     throw new Error(
       "This form is not connected to its database yet. Please email your details to " +
-        "consultants@twentysixconsulting.co.uk and we will pick it up from there.",
+        `${SUPPORT_EMAIL} and we will pick it up from there.`,
     );
   }
   const { error } = await supabase.from("intake_submissions").insert(s);
-  if (error) throw new Error(error.message);
+  if (!error) return;
+
+  // Never show a client a Postgres error. They cannot act on "relation does not
+  // exist", and it reads like something they broke. Keep the detail in the console
+  // for us, and give them a route that always works.
+  console.error("intake insert failed", error);
+  const fallback =
+    ` Please email your details to ${SUPPORT_EMAIL} and we will pick it up from there.`;
+  if (error.code === "23514") {
+    // A check constraint: the email shape, or more than 500 roles.
+    throw new Error(
+      "Some of that did not pass our checks. Please make sure the email address is " +
+        "right and that there are no more than 500 roles." + fallback,
+    );
+  }
+  throw new Error("We could not save that just now." + fallback);
 }
+
 
 export const EXPERIENCE_LEVELS = [
   "Entry or Foundation",
