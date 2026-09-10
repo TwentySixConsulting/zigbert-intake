@@ -487,7 +487,7 @@ function UploadRoles({
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-[14px] mb-1">Upload your completed file</p>
             <p className="text-[13px] text-ink-soft leading-relaxed mb-3">
-              .xlsx or .csv. We read it in your browser and show you what we found before anything is sent.
+              .xlsx or .csv.
             </p>
 
             {!upload ? (
