@@ -9,28 +9,36 @@ let pass = 0, fail = 0;
 const check = (ok, msg) => { ok ? (pass++, console.log("  ok  ", msg)) : (fail++, console.log("  FAIL", msg)); };
 
 // Fill the real template the way a client would, then read it back.
-const TEMPLATE = "public/TwentySix-Benchmarking-Template.xlsx";
+const TEMPLATE = "public/Zigbert-Benchmarking-Template.xlsx";
+// By role tab: title, salary, job level (free text now), family, comment
 const ROLES = [
-  ["Chief Executive", 95000, "Experts, Strategists & Leaders", "Leadership", "London", 1],
-  ["Head of Finance", "£62,500", "Mid to Senior", "Finance", "London", 1],
-  ["Grants Manager", "48k", "Mid to Senior", "Programmes", "Remote (UK)", 3],
-  ["Programme Officer", 34000, "Early and Developing", "Programmes", "Midlands", 4],
-  ["Administrator", "", "Entry or Foundation", "Operations", "", 2],
+  ["Chief Executive", 95000, "Experts, Strategists & Leaders", "Leadership", ""],
+  ["Head of Finance", "\u00a362,500", "Mid to Senior", "Finance", "Covers two funds."],
+  ["Grants Manager", "48k", "Band 5", "Programmes", ""],
+  ["Programme Officer", 34000, "Early and Developing", "Programmes", ""],
+  ["Administrator", "", "Entry or Foundation", "Operations", "Part time, 3 days."],
+];
+// By person tab: ref, title, salary, job level, family, comment
+const PEOPLE = [
+  ["EMP-001", "Data Analyst 1", 41000, "Mid to Senior", "Data", ""],
+  ["EMP-002", "Data Analyst 2", 38500, "Early and Developing", "Data", "Joined in March."],
+  ["", "Data Analyst 3", 44000, "Mid to Senior", "Data", ""],
 ];
 
-async function makeFilled(path) {
+async function makeFilled(path, tab = "By role", rows = ROLES) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(TEMPLATE);
   const org = wb.worksheets.find((w) => /organisation/i.test(w.name));
-  const rows = { "Organisation name": "Hollow Oak Trust", "Industry": "Charity",
+  const orgAnswers = { "Organisation name": "Hollow Oak Trust", "Industry": "Charity",
     "Total number of employees": "40", "Main location": "London",
     "Contact name": "Dana Whitfield", "Contact email": "dana@hollowoak.example" };
   org.eachRow((row) => {
     const label = String(row.getCell(1).value ?? "").trim();
-    if (rows[label] !== undefined) row.getCell(2).value = rows[label];
+    if (orgAnswers[label] !== undefined) row.getCell(2).value = orgAnswers[label];
   });
-  const rs = wb.worksheets.find((w) => /^roles$/i.test(w.name));
-  ROLES.forEach((r, i) => r.forEach((v, c) => { if (v !== "") rs.getCell(6 + i, c + 1).value = v; }));
+  const which = wb.worksheets.find((w) => new RegExp("^" + tab + "$", "i").test(w.name));
+  if (!which) throw new Error("no tab named " + tab);
+  rows.forEach((r, i) => r.forEach((v, c) => { if (v !== "") which.getCell(6 + i, c + 1).value = v; }));
   await wb.xlsx.writeFile(path);
 }
 
@@ -71,18 +79,32 @@ const mod = await import(genPath.href);
 console.log("Parser against the real template");
 await makeFilled("/tmp/filled.xlsx");
 const r = await mod.parseFile(asFile("/tmp/filled.xlsx", "filled.xlsx"));
+check(r.basis === "role", "reports the By role basis (" + r.basis + ")");
 check(r.roles.length === 5, `reads all 5 roles (got ${r.roles.length})`);
 check(r.roles[0].title === "Chief Executive", "reads the role title");
 check(r.roles[0].salary === 95000, `plain number salary (${r.roles[0].salary})`);
 check(r.roles[1].salary === 62500, `"£62,500" -> 62500 (${r.roles[1].salary})`);
 check(r.roles[2].salary === 48000, `"48k" -> 48000 (${r.roles[2].salary})`);
 check(r.roles[4].salary === null, "a blank salary is null, not 0");
-check(r.roles[0].level === "Experts, Strategists & Leaders", "keeps the dropdown level");
-check(r.roles[2].headcount === 3, "reads headcount");
-check(r.roles[4].headcount === 2, "reads headcount when salary is blank");
+check(r.roles[0].level === "Experts, Strategists & Leaders", "keeps our own level wording");
+check(r.roles[2].level === "Band 5", "keeps the client's own level wording verbatim (" + r.roles[2].level + ")");
+check(r.roles[1].comment === "Covers two funds.", "reads the comment column");
+check(r.roles[4].comment === "Part time, 3 days.", "reads a comment when salary is blank");
 check(r.warnings.some((w) => w.includes("1 of 5")), `warns about the missing salary (${r.warnings[0] ?? "none"})`);
 check(r.org.organisation === "Hollow Oak Trust", `reads org name (${r.org.organisation})`);
 check(r.org.contact_email === "dana@hollowoak.example", "reads contact email");
+
+console.log("\nThe By person tab");
+await makeFilled("/tmp/people.xlsx", "By person", PEOPLE);
+const pp = await mod.parseFile(asFile("/tmp/people.xlsx", "people.xlsx"));
+check(pp.basis === "person", "reports the By person basis (" + pp.basis + ")");
+check(pp.roles.length === 3, "reads all 3 people (" + pp.roles.length + ")");
+check(pp.roles[0].ref === "EMP-001", "reads the employee reference (" + pp.roles[0].ref + ")");
+check(pp.roles[2].ref === "", "an omitted reference is empty, not undefined");
+check(pp.roles[0].title === "Data Analyst 1", "reads the anonymised title");
+check(pp.roles[1].comment === "Joined in March.", "reads the comment on the person tab");
+// The reference column shifts every other column right by one.
+check(pp.roles.every((x) => x.salary), "salaries survive the reference column shifting positions");
 
 console.log("\nTolerates what clients actually send");
 check(mod.parseSalary("£1,234") === 1234 && mod.parseSalary("55K") === 55000 &&

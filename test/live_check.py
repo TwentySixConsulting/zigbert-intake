@@ -57,26 +57,28 @@ if exists:
           f"it returned: {body[:160]}")
 
     print("\nConstraints")
-    s, b = call("POST", TABLE, {"contact_name": "x", "contact_email": "not-an-email",
-                                "organisation": "x", "roles": []})
+    base = {"contact_name": "x", "organisation": "x", "industry": "Charity",
+            "employee_count": "0-49", "main_location": "London", "roles": []}
+    s, b = call("POST", TABLE, {**base, "contact_email": "not-an-email"})
     check(s >= 400 and "intake_email_shape" in b, "a malformed email is rejected by the database",
           f"HTTP {s}: {b[:160]}")
-    s, b = call("POST", TABLE, {"contact_name": "x", "contact_email": "a@b.co",
-                                "organisation": "x", "roles": {"not": "an array"}})
+    s, b = call("POST", TABLE, {**base, "contact_email": "a@b.co", "roles": {"not": "an array"}})
     check(s >= 400, "a roles value that is not an array is rejected", f"HTTP {s}: {b[:160]}")
 
     if "--write" in sys.argv:
         print("\nReal insert (this fires the webhooks and sends both emails)")
         row = {
             "contact_name": "Intake Test", "contact_email": env.get("TEST_EMAIL", "millieharrison@twentysixconsulting.co.uk"),
-            "contact_job_title": "Automated check", "organisation": "TwentySix internal test",
-            "industry": "Charity", "employee_count": "40", "main_location": "London",
-            "entry_mode": "online", "notes": "Automated live check. Safe to delete.",
+            "contact_job_title": "Automated check", "organisation": "Zigbert internal test",
+            "industry": "Charity", "employee_count": "0-49", "main_location": "London",
+            "basis": "role", "entry_mode": "online",
+            "notes": "Automated live check. Safe to delete.",
             "roles": [
-                {"title": "Chief Executive", "salary": 95000, "level": "Experts, Strategists & Leaders",
-                 "family": "Leadership", "location": "London", "headcount": 1},
-                {"title": "Grants Manager", "salary": 48000, "level": "Mid to Senior",
-                 "family": "Programmes", "location": "Remote (UK)", "headcount": 3},
+                {"ref": "", "title": "Chief Executive", "salary": 95000,
+                 "level": "Experts, Strategists & Leaders", "family": "Leadership", "comment": ""},
+                {"ref": "", "title": "Grants Manager", "salary": 48000,
+                 "level": "Mid to Senior", "family": "Programmes",
+                 "comment": "Covers two funds since March."},
             ],
         }
         s, b = call("POST", TABLE, row)
@@ -85,7 +87,7 @@ if exists:
             print("       Check both inboxes now:")
             print(f"         client confirmation -> {row['contact_email']}")
             print( "         consultant notice   -> millieharrison@twentysixconsulting.co.uk")
-            print( "       Delete the row afterwards: it is labelled 'TwentySix internal test'.")
+            print( "       Delete the row afterwards: it is labelled 'Zigbert internal test'.")
     else:
         print("\n(Run with --write to insert a real row and test both emails.)")
 

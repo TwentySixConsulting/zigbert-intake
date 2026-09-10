@@ -6,5 +6,5 @@ import tailwindcss from "@tailwindcss/vite";
 // production build and a bare root in dev.
 export default defineConfig(({ command }) => ({
   plugins: [react(), tailwindcss()],
-  base: command === "build" ? "/twentysix-intake/" : "/",
+  base: command === "build" ? "/zigbert-intake/" : "/",
 }));

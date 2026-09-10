@@ -10,7 +10,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "TwentySix <onboarding@resend.dev>";
+const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "Zigbert <onboarding@resend.dev>";
 
 // The only address that ever receives these.
 const NOTIFY_TO = "millieharrison@twentysixconsulting.co.uk";
@@ -26,8 +26,8 @@ function row(label: string, value: unknown) {
 }
 
 type Role = {
-  title?: string; salary?: number | null; level?: string;
-  family?: string; location?: string; headcount?: number | null;
+  ref?: string; title?: string; salary?: number | null;
+  level?: string; family?: string; comment?: string;
 };
 
 /** The roles as a CSV attachment, so they can go straight into the build. */
@@ -36,10 +36,11 @@ function rolesCsv(roles: Role[]): string {
     const s = String(v ?? "");
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const head = ["Role title", "Current FTE salary", "Experience level", "Function or job family", "Location", "Headcount"];
+  const head = ["Employee ID", "Role title", "Current FTE salary", "Job level",
+                "Function or job family", "Comment"];
   const lines = [head.join(",")];
   for (const r of roles) {
-    lines.push([r.title, r.salary ?? "", r.level, r.family, r.location, r.headcount ?? ""].map(cell).join(","));
+    lines.push([r.ref, r.title, r.salary ?? "", r.level, r.family, r.comment].map(cell).join(","));
   }
   return lines.join("\n");
 }
@@ -74,7 +75,7 @@ serve(async (req) => {
       <div style="font-family:-apple-system,Segoe UI,Inter,Arial,sans-serif;color:#121c2b;max-width:620px;">
         <h2 style="margin:0 0 4px;font-size:18px;">New benchmarking intake</h2>
         <p style="margin:0 0 16px;color:#4b5563;font-size:13.5px;">
-          ${esc(r.organisation)} · ${roles.length} role${roles.length === 1 ? "" : "s"}
+          ${esc(r.organisation)} · ${roles.length} ${r.basis === "person" ? "people" : "role" + (roles.length === 1 ? "" : "s")}
           ${noSalary ? ` · <strong style="color:#b0603f;">${noSalary} with no salary</strong>` : ""}
         </p>
         <table style="border-collapse:collapse;font-size:13.5px;margin-bottom:18px;">
@@ -86,6 +87,7 @@ serve(async (req) => {
           ${row("Sector", r.industry)}
           ${row("Employees", r.employee_count)}
           ${row("Main location", r.main_location)}
+          ${row("Basis", r.basis === "person" ? "One row per person" : "One row per role")}
           ${row("Entered via", r.entry_mode === "upload" ? `Uploaded file (${esc(r.uploaded_filename)})` : "Typed into the form")}
           ${row("Submitted", r.created_at)}
           ${row("Submission id", r.id)}

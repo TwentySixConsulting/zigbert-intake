@@ -3,19 +3,22 @@ import {
   Building2, CheckCircle2, Download, FileSpreadsheet, Loader2,
   Plus, Trash2, Upload, AlertTriangle, PencilLine,
 } from "lucide-react";
-import { EXPERIENCE_LEVELS, LOCATIONS, submitIntake, supabaseConfigured, type Role } from "./lib/supabase";
+import {
+  EMPLOYEE_BANDS, LEVEL_GUIDE, LOCATIONS, SUPPORT_EMAIL,
+  submitIntake, supabaseConfigured, type Role,
+} from "./lib/supabase";
 import { parseFile, type ParseResult } from "./lib/parseRoles";
 import { Button, Field, Steps, inputClass } from "./components/ui";
 
-const TEMPLATE = `${import.meta.env.BASE_URL}TwentySix-Benchmarking-Template.xlsx`;
-const CONTACT = "consultants@twentysixconsulting.co.uk";
+const TEMPLATE = `${import.meta.env.BASE_URL}Zigbert-Benchmarking-Template.xlsx`;
+const CONTACT = SUPPORT_EMAIL;
 
 const emptyRole = (): Role => ({
-  title: "", salary: null, level: "", family: "", location: "", headcount: null,
+  ref: "", title: "", salary: null, level: "", family: "", comment: "",
 });
 
 type Contact = {
-  contact_name: string; contact_email: string; contact_job_title: string; contact_phone: string;
+  contact_name: string; contact_email: string; contact_job_title: string;
 };
 type Org = {
   organisation: string; industry: string; employee_count: string; main_location: string;
@@ -26,12 +29,14 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 export function App() {
   const [step, setStep] = useState(1);
   const [contact, setContact] = useState<Contact>({
-    contact_name: "", contact_email: "", contact_job_title: "", contact_phone: "",
+    contact_name: "", contact_email: "", contact_job_title: "",
   });
   const [org, setOrg] = useState<Org>({
     organisation: "", industry: "", employee_count: "", main_location: "",
   });
   const [mode, setMode] = useState<"online" | "upload" | null>(null);
+  // One row per role, or one per person. Mirrors the template's two tabs.
+  const [basis, setBasis] = useState<"role" | "person">("role");
   const [roles, setRoles] = useState<Role[]>([emptyRole()]);
   const [upload, setUpload] = useState<{ name: string; result: ParseResult } | null>(null);
   const [notes, setNotes] = useState("");
@@ -64,6 +69,11 @@ export function App() {
   function validateStep2() {
     const e: Record<string, string> = {};
     if (!org.organisation.trim()) e.organisation = "Please give the organisation's name.";
+    // All three set the comparator group, so a benchmark without them is a
+    // national average dressed up as a peer comparison.
+    if (!org.industry.trim()) e.industry = "We need this to pick the right comparator group.";
+    if (!org.employee_count) e.employee_count = "Please choose a size band.";
+    if (!org.main_location) e.main_location = "Please choose where most of your people are.";
     setErrors(e);
     return !Object.keys(e).length;
   }
@@ -76,11 +86,16 @@ export function App() {
       setUpload({ name: file.name, result });
       // The template carries the organisation details too, so a client who filled
       // those in should not have to type them again.
+      setBasis(result.basis);
       setOrg((o) => ({
         organisation: o.organisation || result.org.organisation || "",
         industry: o.industry || result.org.industry || "",
-        employee_count: o.employee_count || result.org.employee_count || "",
-        main_location: o.main_location || result.org.main_location || "",
+        // Only adopt a value the form can actually offer, or the select would
+        // sit blank while claiming to be filled.
+        employee_count: o.employee_count ||
+          (EMPLOYEE_BANDS as readonly string[]).find((b) => b === result.org.employee_count) || "",
+        main_location: o.main_location ||
+          (LOCATIONS as readonly string[]).find((l) => l === result.org.main_location) || "",
       }));
       setContact((c) => ({
         ...c,
@@ -103,12 +118,9 @@ export function App() {
       await submitIntake({
         ...contact,
         contact_job_title: contact.contact_job_title || null,
-        contact_phone: contact.contact_phone || null,
         ...org,
-        industry: org.industry || null,
-        employee_count: org.employee_count || null,
-        main_location: org.main_location || null,
         roles: filledRoles,
+        basis,
         entry_mode: mode === "upload" ? "upload" : "online",
         uploaded_filename: upload?.name ?? null,
         notes: notes || null,
@@ -157,10 +169,6 @@ export function App() {
                   <input className={inputClass} value={contact.contact_job_title}
                     onChange={(e) => setContact({ ...contact, contact_job_title: e.target.value })} />
                 </Field>
-                <Field label="Phone">
-                  <input className={inputClass} type="tel" value={contact.contact_phone} autoComplete="tel"
-                    onChange={(e) => setContact({ ...contact, contact_phone: e.target.value })} />
-                </Field>
               </div>
               <div className="flex justify-end mt-7">
                 <Button onClick={() => validateStep1() && go(2)}>Continue</Button>
@@ -175,20 +183,29 @@ export function App() {
                 This sets the comparator group. Sector, size and location are what make a
                 benchmark comparable rather than merely national.
               </p>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <Field label="Organisation name" required error={errors.organisation}>
+              {/* items-start, or a field showing an error stretches its neighbour
+                  and the two columns stop lining up. */}
+              <div className="grid sm:grid-cols-2 gap-x-4 gap-y-5 items-start">
+                <Field label="Organisation name" required error={errors.organisation}
+                  hint="As you would like it to appear on the report.">
                   <input className={inputClass} value={org.organisation} autoComplete="organization"
                     onChange={(e) => setOrg({ ...org, organisation: e.target.value })} />
                 </Field>
-                <Field label="Sector or industry" hint="e.g. Charity, Technology, Housing">
+                <Field label="Sector or industry" required error={errors.industry}
+                  hint="For example charity, technology, housing.">
                   <input className={inputClass} value={org.industry}
                     onChange={(e) => setOrg({ ...org, industry: e.target.value })} />
                 </Field>
-                <Field label="Total employees">
-                  <input className={inputClass} inputMode="numeric" value={org.employee_count}
-                    onChange={(e) => setOrg({ ...org, employee_count: e.target.value })} />
+                <Field label="Total employees" required error={errors.employee_count}
+                  hint="Provision rises with size, so we compare like with like.">
+                  <select className={inputClass} value={org.employee_count}
+                    onChange={(e) => setOrg({ ...org, employee_count: e.target.value })}>
+                    <option value="">Select…</option>
+                    {EMPLOYEE_BANDS.map((b) => <option key={b} value={b}>{b} employees</option>)}
+                  </select>
                 </Field>
-                <Field label="Main location" hint="Used where a role has no location of its own.">
+                <Field label="Main location" required error={errors.main_location}
+                  hint="Where most of your people are based.">
                   <select className={inputClass} value={org.main_location}
                     onChange={(e) => setOrg({ ...org, main_location: e.target.value })}>
                     <option value="">Select…</option>
@@ -207,15 +224,15 @@ export function App() {
             <section>
               <h1 className="text-[22px] font-bold mb-1">Your roles</h1>
               <p className="text-[13.5px] text-ink-soft mb-6 leading-relaxed">
-                Whichever is easier. You can type them straight in, or fill in our spreadsheet
-                and upload it. There is no limit on how many.
+                Whichever is easier. Type them straight in, fill in our spreadsheet, or send us
+                a spreadsheet you already have. There is no limit on how many.
               </p>
 
               {mode === null && <ModeChoice onPick={setMode} />}
 
               {mode === "online" && (
                 <OnlineRoles
-                  roles={roles} setRoles={setRoles}
+                  roles={roles} setRoles={setRoles} basis={basis} setBasis={setBasis}
                   onSwitch={() => { setMode("upload"); setParseError(""); }}
                 />
               )}
@@ -244,7 +261,7 @@ export function App() {
                         {filledRoles.length} role{filledRoles.length === 1 ? "" : "s"} ready
                       </span>
                       <Button onClick={send} disabled={busy || !filledRoles.length}>
-                        {busy ? <><Loader2 size={15} className="animate-spin" /> Sending…</> : "Send to TwentySix"}
+                        {busy ? <><Loader2 size={15} className="animate-spin" /> Sending…</> : "Send to Zigbert"}
                       </Button>
                     </div>
                   </div>
@@ -268,9 +285,9 @@ function Header() {
   return (
     <header className="bg-white border-b border-line">
       <div className="max-w-3xl mx-auto px-5 py-4 flex items-center gap-3">
-        <img src={`${import.meta.env.BASE_URL}twentysix-logo.png`} alt="TwentySix" className="h-6 w-auto" />
+        <img src={`${import.meta.env.BASE_URL}zigbert-logo.png`} alt="Zigbert" className="h-7 w-auto" />
         <span className="text-[12.5px] text-ink-soft border-l border-line pl-3">
-          Pay &amp; Benefits Benchmarking
+          Pay &amp; Benefits Intelligence
         </span>
       </div>
     </header>
@@ -304,24 +321,74 @@ function ModeChoice({ onPick }: { onPick: (m: "online" | "upload") => void }) {
         <FileSpreadsheet size={20} className="text-clay mb-3" />
         <span className="block font-display font-semibold text-[15px] mb-1">Use our spreadsheet</span>
         <span className="block text-[13px] text-ink-soft leading-relaxed">
-          Best for a long list, or if the data already lives in a spreadsheet. Download,
-          fill in, upload.
+          Best for a long list. Download ours and fill it in, or just send the spreadsheet
+          you already have and we will sort it out.
         </span>
       </button>
     </div>
   );
 }
 
+function BasisToggle({ basis, onChange }: { basis: "role" | "person"; onChange: (b: "role" | "person") => void }) {
+  const opt = (v: "role" | "person", label: string, sub: string) => (
+    <button type="button" onClick={() => onChange(v)}
+      aria-pressed={basis === v}
+      className={"flex-1 text-left rounded-lg border px-4 py-3 transition " +
+        (basis === v ? "border-clay bg-clay-wash" : "border-line bg-white hover:border-clay/50")}>
+      <span className="block text-[13.5px] font-semibold">{label}</span>
+      <span className="block text-[12px] text-ink-soft mt-0.5 leading-relaxed">{sub}</span>
+    </button>
+  );
+  return (
+    <div className="flex flex-col sm:flex-row gap-3 mb-5">
+      {opt("role", "One row per role", "One line for each job, however many people hold it.")}
+      {opt("person", "One row per person", "Keeps the spread when people on the same job are paid differently.")}
+    </div>
+  );
+}
+
+function LevelHelp() {
+  return (
+    <details className="mt-4 rounded-xl border border-line bg-canvas/60 p-4">
+      <summary className="cursor-pointer text-[13px] font-semibold text-clay-deep">
+        Your job levels may look like this
+      </summary>
+      <p className="text-[12.5px] text-ink-soft leading-relaxed mt-2.5 mb-3">
+        These are the four levels we benchmark against. Use your own wording if that is
+        easier and we will map it across. If a role sits between two, say so in the comment.
+      </p>
+      <dl className="space-y-2">
+        {LEVEL_GUIDE.map((l) => (
+          <div key={l.name} className="grid sm:grid-cols-[210px_1fr] gap-x-4 gap-y-0.5">
+            <dt className="text-[12.5px] font-semibold text-ink">{l.name}</dt>
+            <dd className="text-[12.5px] text-ink-soft leading-relaxed">{l.meaning}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+}
+
 function OnlineRoles({
-  roles, setRoles, onSwitch,
-}: { roles: Role[]; setRoles: (r: Role[]) => void; onSwitch: () => void }) {
+  roles, setRoles, basis, setBasis, onSwitch,
+}: {
+  roles: Role[]; setRoles: (r: Role[]) => void;
+  basis: "role" | "person"; setBasis: (b: "role" | "person") => void;
+  onSwitch: () => void;
+}) {
   const set = (i: number, patch: Partial<Role>) =>
     setRoles(roles.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const noun = basis === "person" ? "Person" : "Role";
   return (
     <div>
+      <BasisToggle basis={basis} onChange={setBasis} />
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[12.5px] text-ink-soft">One row per role. Only the title is required.</span>
-        <button type="button" onClick={onSwitch} className="text-[12.5px] font-medium text-clay-deep underline">
+        <span className="text-[12.5px] text-ink-soft">
+          {basis === "person"
+            ? "Keep it anonymous: number people who share a title, for example Data Analyst 1 and Data Analyst 2."
+            : "One row per role. Only the title and the salary are needed."}
+        </span>
+        <button type="button" onClick={onSwitch} className="flex-none ml-4 text-[12.5px] font-medium text-clay-deep underline">
           Use the spreadsheet instead
         </button>
       </div>
@@ -329,9 +396,9 @@ function OnlineRoles({
         {roles.map((r, i) => (
           <div key={i} className="border border-line rounded-xl p-4 bg-canvas/60">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">Role {i + 1}</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">{noun} {i + 1}</span>
               {roles.length > 1 && (
-                <button type="button" aria-label={`Remove role ${i + 1}`}
+                <button type="button" aria-label={`Remove ${noun.toLowerCase()} ${i + 1}`}
                   onClick={() => setRoles(roles.filter((_, j) => j !== i))}
                   className="text-ink-soft hover:text-clay-deep">
                   <Trash2 size={15} />
@@ -339,36 +406,34 @@ function OnlineRoles({
               )}
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
-              <input className={inputClass} placeholder="Role title" value={r.title}
-                onChange={(e) => set(i, { title: e.target.value })} />
+              {basis === "person" && (
+                <input className={inputClass} placeholder="Employee ID (optional)" value={r.ref}
+                  onChange={(e) => set(i, { ref: e.target.value })} />
+              )}
+              <input className={inputClass}
+                placeholder={basis === "person" ? "Role title, e.g. Data Analyst 1" : "Role title"}
+                value={r.title} onChange={(e) => set(i, { title: e.target.value })} />
               <input className={inputClass} placeholder="Current FTE salary (£)" inputMode="numeric"
                 value={r.salary ?? ""} onChange={(e) => {
                   const n = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10);
                   set(i, { salary: Number.isFinite(n) ? n : null });
                 }} />
-              <select className={inputClass} value={r.level} onChange={(e) => set(i, { level: e.target.value })}>
-                <option value="">Experience level…</option>
-                {EXPERIENCE_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-              </select>
+              <input className={inputClass} placeholder="Job level" value={r.level}
+                onChange={(e) => set(i, { level: e.target.value })} />
               <input className={inputClass} placeholder="Function or job family" value={r.family}
                 onChange={(e) => set(i, { family: e.target.value })} />
-              <select className={inputClass} value={r.location} onChange={(e) => set(i, { location: e.target.value })}>
-                <option value="">Location…</option>
-                {LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}
-              </select>
-              <input className={inputClass} placeholder="Headcount (optional)" inputMode="numeric"
-                value={r.headcount ?? ""} onChange={(e) => {
-                  const n = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10);
-                  set(i, { headcount: Number.isFinite(n) ? n : null });
-                }} />
+              <input className={inputClass + " sm:col-span-2"}
+                placeholder="Comment (optional), anything specific we should know"
+                value={r.comment} onChange={(e) => set(i, { comment: e.target.value })} />
             </div>
           </div>
         ))}
       </div>
       <button type="button" onClick={() => setRoles([...roles, emptyRole()])}
         className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-clay-deep hover:underline">
-        <Plus size={15} /> Add another role
+        <Plus size={15} /> Add another {noun.toLowerCase()}
       </button>
+      <LevelHelp />
     </div>
   );
 }
@@ -399,13 +464,19 @@ function UploadRoles({
           <div className="min-w-0">
             <p className="font-semibold text-[14px] mb-1">Download the template</p>
             <p className="text-[13px] text-ink-soft leading-relaxed mb-3">
-              Two tabs: your organisation details, and one row per role. Experience level and
-              location are dropdowns, so there is nothing to guess at.
+              Three tabs: your organisation details, then <b>By role</b> or <b>By person</b>,
+              whichever suits how you hold the data. Fill in one of them, not both. There is a
+              guide to job levels on the first tab.
             </p>
             <a href={TEMPLATE} download
               className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-[13.5px] font-semibold hover:border-clay hover:text-clay-deep transition">
-              <Download size={15} /> TwentySix-Benchmarking-Template.xlsx
+              <Download size={15} /> Zigbert-Benchmarking-Template.xlsx
             </a>
+            <p className="text-[12.5px] text-ink-soft leading-relaxed mt-3">
+              <b className="text-ink">Already have this in a spreadsheet of your own?</b> Send us
+              that instead. As long as there is a row per role and a column for the title and the
+              salary, we will sort out the rest. It does not need to match our headings.
+            </p>
           </div>
         </div>
       </div>
@@ -448,7 +519,9 @@ function UploadRoles({
                   </button>
                 </div>
                 <p className="text-[13px] text-ink-soft mb-3">
-                  <strong className="text-ink">{upload.result.roles.length} roles</strong> read from the file.
+                  <strong className="text-ink">{upload.result.roles.length}</strong>{" "}
+                  {upload.result.basis === "person" ? "people" : "roles"} read from the file
+                  {upload.result.basis === "person" ? " (By person tab)" : ""}.
                 </p>
                 {upload.result.warnings.map((w, i) => (
                   <p key={i} className="text-[12.5px] text-clay-deep mb-1.5">• {w}</p>
@@ -457,14 +530,20 @@ function UploadRoles({
                   <table className="w-full text-[12.5px]">
                     <thead className="bg-slate-wash sticky top-0">
                       <tr>
+                        {upload.result.basis === "person" && (
+                          <th className="text-left font-semibold px-3 py-2">Ref</th>
+                        )}
                         <th className="text-left font-semibold px-3 py-2">Role</th>
                         <th className="text-left font-semibold px-3 py-2">Salary</th>
-                        <th className="text-left font-semibold px-3 py-2">Level</th>
+                        <th className="text-left font-semibold px-3 py-2">Job level</th>
                       </tr>
                     </thead>
                     <tbody>
                       {upload.result.roles.slice(0, 60).map((r, i) => (
                         <tr key={i} className="border-t border-line-soft">
+                          {upload.result.basis === "person" && (
+                            <td className="px-3 py-1.5 text-ink-soft">{r.ref || "—"}</td>
+                          )}
                           <td className="px-3 py-1.5">{r.title}</td>
                           <td className="px-3 py-1.5">{r.salary === null ? "—" : `£${r.salary.toLocaleString()}`}</td>
                           <td className="px-3 py-1.5 text-ink-soft">{r.level || "—"}</td>

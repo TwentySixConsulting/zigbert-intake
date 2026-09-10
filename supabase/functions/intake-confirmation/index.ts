@@ -14,7 +14,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ??
-  "TwentySix Consulting <hello@twentysixconsulting.co.uk>";
+  "Zigbert <hello@twentysixconsulting.co.uk>";
 const REPLY_TO = "consultants@twentysixconsulting.co.uk";
 
 const INK = "#121c2b", CLAY = "#c9785a", SLATE = "#5e7191", LINE = "#dee1e6", MUTED = "#4b5563";
@@ -29,8 +29,8 @@ function html(firstName: string, org: string, count: number) {
   <div style="max-width:540px;margin:0 auto;padding:32px 20px;">
     <div style="background:#fff;border:1px solid ${LINE};border-radius:16px;overflow:hidden;">
       <div style="background:${SLATE};padding:20px 26px;color:#fff;">
-        <div style="font-size:19px;font-weight:700;letter-spacing:-0.02em;">TwentySix Consulting</div>
-        <div style="font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;opacity:.85;margin-top:3px;">Pay &amp; Benefits Benchmarking</div>
+        <div style="font-size:19px;font-weight:700;letter-spacing:-0.02em;">Zigbert</div>
+        <div style="font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;opacity:.85;margin-top:3px;">Pay &amp; Benefits Intelligence</div>
       </div>
       <div style="padding:26px;">
         <h1 style="font-size:20px;margin:0 0 14px;">We have your roles</h1>
@@ -55,7 +55,7 @@ function html(firstName: string, org: string, count: number) {
       </div>
     </div>
     <p style="text-align:center;font-size:11.5px;color:${MUTED};margin:14px 0 0;">
-      TwentySix Consulting · <a href="mailto:${REPLY_TO}" style="color:${CLAY};">${REPLY_TO}</a>
+      Zigbert is a reward intelligence platform from TwentySix Consulting · <a href="mailto:${REPLY_TO}" style="color:${CLAY};">${REPLY_TO}</a>
     </p>
   </div>
 </body></html>`;

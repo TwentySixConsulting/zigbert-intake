@@ -73,7 +73,7 @@ labelled **TwentySix internal test** so you can find and delete it afterwards.
 
 ## Sending it to a client
 
-The link is https://twentysixconsulting.github.io/twentysix-intake/ and it needs no
+The link is https://twentysixconsulting.github.io/zigbert-intake/ and it needs no
 login. It is `noindex`, so it will not turn up in a search, but treat the URL as
 semi-public: anyone with it can submit. That is deliberate, so a client can forward it
 to whoever actually holds the salary data.
@@ -86,7 +86,7 @@ carries the roles as a CSV attachment.
 
 ## Changing the template
 
-`build/build_template.py` generates `public/TwentySix-Benchmarking-Template.xlsx`.
+`build/build_template.py` generates `public/Zigbert-Benchmarking-Template.xlsx`.
 Edit the script, run `npm run template`, rebuild, push.
 
 If you change a **column heading**, check `COLUMNS` in `src/lib/parseRoles.ts`. The

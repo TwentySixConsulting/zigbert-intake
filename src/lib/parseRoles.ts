@@ -1,5 +1,4 @@
 import type { Role } from "./supabase";
-import { EXPERIENCE_LEVELS, LOCATIONS } from "./supabase";
 
 /**
  * Read roles out of the completed template.
@@ -14,6 +13,8 @@ import { EXPERIENCE_LEVELS, LOCATIONS } from "./supabase";
 export type ParseResult = {
   roles: Role[];
   warnings: string[];
+  /** Which tab the rows came off, so the site can label them the same way. */
+  basis: "role" | "person";
   org: Partial<{
     organisation: string;
     industry: string;
@@ -41,28 +42,16 @@ export function parseSalary(v: unknown): number | null {
   return Number.isFinite(n) ? Math.round(n) : null;
 }
 
-function parseCount(v: unknown): number | null {
-  const n = parseInt(norm(v).replace(/[^0-9]/g, ""), 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-/** Match a free-typed level or location back to the list, else keep what they wrote. */
-function closest(value: string, options: readonly string[]): string {
-  const v = key(value);
-  if (!v) return "";
-  const exact = options.find((o) => key(o) === v);
-  if (exact) return exact;
-  const partial = options.find((o) => key(o).includes(v) || v.includes(key(o)));
-  return partial ?? value;
-}
-
-const COLUMNS: Record<keyof Omit<Role, never>, string[]> = {
-  title: ["roletitle", "role", "jobtitle", "title", "position"],
-  salary: ["currentftesalary", "currentftesalary£", "salary", "ftesalary", "currentsalary", "basesalary"],
-  level: ["experiencelevel", "level", "seniority", "grade"],
-  family: ["functionorjobfamily", "function", "jobfamily", "family", "department", "team"],
-  location: ["location", "region", "office", "basedin"],
-  headcount: ["headcountoptional", "headcount", "numberofpeople", "fte", "count"],
+// Aliases, because "send us the spreadsheet you already have" means the headings
+// will not be ours. Longest-first within each field so "employeeid" is not eaten
+// by a shorter alias.
+const COLUMNS: Record<keyof Role, string[]> = {
+  ref: ["employeeid", "employeeref", "employeenumber", "staffid", "payrollid", "reference", "id"],
+  title: ["roletitle", "jobtitle", "role", "title", "position", "jobrole"],
+  salary: ["currentftesalary", "ftesalary", "currentsalary", "basesalary", "salary", "pay"],
+  level: ["joblevel", "experiencelevel", "level", "seniority", "grade", "band"],
+  family: ["functionorjobfamily", "jobfamily", "function", "family", "department", "team", "directorate"],
+  comment: ["commentoptional", "comment", "comments", "notes", "note"],
 };
 
 function matchColumns(header: unknown[]): Partial<Record<keyof Role, number>> {
@@ -116,8 +105,8 @@ function rowsToRoles(rows: unknown[][], warnings: string[]): Role[] {
   for (const need of ["salary", "level"] as const) {
     if (cols[need] === undefined) {
       warnings.push(
-        `No “${need === "salary" ? "Current FTE salary" : "Experience level"}” column was found, ` +
-          "so that field is blank for every role.",
+        `No “${need === "salary" ? "Current FTE salary" : "Job level"}” column was found, ` +
+          "so that field is blank for every row.",
       );
     }
   }
@@ -131,12 +120,12 @@ function rowsToRoles(rows: unknown[][], warnings: string[]): Role[] {
     const salary = cols.salary !== undefined ? parseSalary(r[cols.salary]) : null;
     if (salary === null) skippedNoSalary++;
     roles.push({
+      ref: cols.ref !== undefined ? norm(r[cols.ref]) : "",
       title,
       salary,
-      level: cols.level !== undefined ? closest(norm(r[cols.level]), EXPERIENCE_LEVELS) : "",
+      level: cols.level !== undefined ? norm(r[cols.level]) : "",
       family: cols.family !== undefined ? norm(r[cols.family]) : "",
-      location: cols.location !== undefined ? closest(norm(r[cols.location]), LOCATIONS) : "",
-      headcount: cols.headcount !== undefined ? parseCount(r[cols.headcount]) : null,
+      comment: cols.comment !== undefined ? norm(r[cols.comment]) : "",
     });
   }
 
@@ -208,15 +197,46 @@ export async function parseWorkbook(file: File): Promise<ParseResult> {
     return out;
   };
 
-  const rolesSheet =
-    wb.worksheets.find((w) => /role/i.test(w.name)) ?? wb.worksheets[0];
-  if (!rolesSheet) throw new Error("That file has no worksheets in it.");
-  const roles = rowsToRoles(toRows(rolesSheet), warnings);
+  // A client fills in one tab or the other. Prefer whichever actually has rows,
+  // rather than assuming: an empty "By role" tab in front of a filled-in
+  // "By person" tab would otherwise read as an empty submission.
+  const byPerson = wb.worksheets.find((w) => /person/i.test(w.name));
+  const byRole = wb.worksheets.find((w) => /role/i.test(w.name));
+  const candidates = [byRole, byPerson, ...wb.worksheets].filter(Boolean) as typeof wb.worksheets;
+  if (!candidates.length) throw new Error("That file has no worksheets in it.");
+
+  let roles: Role[] = [];
+  let basis: "role" | "person" = "role";
+  let lastErr: unknown = null;
+  for (const ws of candidates) {
+    try {
+      const got = rowsToRoles(toRows(ws), warnings);
+      if (got.length) {
+        roles = got;
+        basis = ws === byPerson ? "person" : "role";
+        break;
+      }
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (!roles.length) throw (lastErr ?? new Error("No rows were found in that file."));
+  if (byRole && byPerson) {
+    const other = basis === "person" ? byRole : byPerson;
+    let otherCount = 0;
+    try { otherCount = rowsToRoles(toRows(other), []).length; } catch { /* empty is fine */ }
+    if (otherCount) {
+      warnings.push(
+        `Both tabs have rows. We have used the “${basis === "person" ? "By person" : "By role"}” ` +
+          `tab (${roles.length}) and ignored the other (${otherCount}). Tell us if that is the wrong way round.`,
+      );
+    }
+  }
 
   const orgSheet = wb.worksheets.find((w) => /organisation|organization|info/i.test(w.name));
   const org = orgSheet ? sheetToOrg(toRows(orgSheet)) : {};
 
-  return { roles, warnings, org };
+  return { roles, warnings, basis, org };
 }
 
 /** Minimal RFC4180-ish reader: handles quoted fields and embedded commas. */
@@ -243,7 +263,9 @@ export function parseCsvText(text: string): string[][] {
 export async function parseCsv(file: File): Promise<ParseResult> {
   const warnings: string[] = [];
   const roles = rowsToRoles(parseCsvText(await file.text()), warnings);
-  return { roles, warnings, org: {} };
+  // A csv is a flat list, so infer the basis from whether it carries a reference.
+  const basis = roles.some((r) => r.ref) ? "person" : "role";
+  return { roles, warnings, basis, org: {} };
 }
 
 export async function parseFile(file: File): Promise<ParseResult> {

@@ -1,11 +1,11 @@
-# TwentySix benchmarking intake
+# Zigbert benchmarking intake
 
 A standalone sign-up sheet. Send a client the link; they give us their details and the
 roles they want benchmarked, either typed straight in or on our spreadsheet. It lands in
 Supabase, and two emails go out: a confirmation to them, and a notification to us with
 the roles attached as a CSV, ready to build their dashboard.
 
-**Live:** https://twentysixconsulting.github.io/twentysix-intake/
+**Live:** https://twentysixconsulting.github.io/zigbert-intake/
 **Setup:** [SETUP.md](SETUP.md) — the table, the emails and the webhooks need doing once.
 
 ## How it works
@@ -34,10 +34,10 @@ python3 test/form_test.py      # the whole form in a browser (needs the build se
 python3 test/live_check.py     # the live Supabase wiring
 ```
 
-`form_test.py` expects the build served at `http://localhost:4200/twentysix-intake/`:
+`form_test.py` expects the build served at `http://localhost:4200/zigbert-intake/`:
 
 ```bash
-npm run build && mkdir -p /tmp/serve && cp -R dist /tmp/serve/twentysix-intake \
+npm run build && mkdir -p /tmp/serve && cp -R dist /tmp/serve/zigbert-intake \
   && (cd /tmp/serve && python3 -m http.server 4200 &)
 ```
 

@@ -11,13 +11,14 @@ create table if not exists public.intake_submissions (
   contact_name       text        not null,
   contact_email      text        not null,
   contact_job_title  text,
-  contact_phone      text,
 
-  -- their organisation
+  -- Their organisation. Industry, size and location are NOT NULL because they are
+  -- what define the comparator group: without them a "benchmark" is a national
+  -- average wearing a peer comparison's clothes.
   organisation       text        not null,
-  industry           text,
-  employee_count     text,
-  main_location      text,
+  industry           text        not null,
+  employee_count     text        not null,
+  main_location      text        not null,
 
   -- what they sent. Roles are held as JSONB rather than a child table so the
   -- whole submission lands in ONE insert: the confirmation and notification
@@ -25,6 +26,9 @@ create table if not exists public.intake_submissions (
   -- email before the roles arrived or need a transaction the anon role cannot run.
   roles              jsonb       not null default '[]'::jsonb,
   role_count         integer     generated always as (jsonb_array_length(roles)) stored,
+  -- One row per role, or one per person. Mirrors the template's two tabs; a person
+  -- basis keeps the spread where people on the same job are paid differently.
+  basis              text        not null default 'role' check (basis in ('role', 'person')),
   entry_mode         text        check (entry_mode in ('online', 'upload')),
   uploaded_filename  text,
   notes              text,
@@ -33,7 +37,9 @@ create table if not exists public.intake_submissions (
 );
 
 comment on column public.intake_submissions.roles is
-  'Array of {title, salary, level, family, location, headcount}. Salary is a number or null.';
+  'Array of {ref, title, salary, level, family, comment}. Salary is a number or null; '
+  'ref is an optional client-side employee reference, never a name. Level is free text: '
+  'the client uses their own wording and we map it onto our four levels.';
 
 -- A client may legitimately submit twice (a correction, or a second batch), so
 -- there is deliberately NO unique index on email. Duplicates are a support
